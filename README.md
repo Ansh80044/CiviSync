@@ -7,12 +7,10 @@ Built for Smart India Hackathon — a complete end-to-end MVP prototype.
 ---
 ## 👥 The Team
 
-This project was built collaboratively for the Smart India Hackathon 2026 by:
+Smart India Hackathon 2026 project
 
 * Utkarsh Singh - [@Ansh80044](https://github.com/Ansh80044)
-* Joash Zachariah Sojan - [@joashzach](https://github.com/joashzach)
-* Ardhendumauli Mishra - [@TheirGitHubUsername]
-* Tanmay Ranjan - [@TheirGitHubUsername]
+
 
 ---
 
@@ -23,10 +21,10 @@ This project was built collaboratively for the Smart India Hackathon 2026 by:
 | Frontend | React + Vite |
 | Styling | Tailwind CSS v4 |
 | Backend | Node.js + Express |
-| Auth | Supabase Auth |
+| Auth | Firebase Auth |
 | Database | MongoDB Atlas |
 | AI | Groq AI (Llama 4 Vision) |
-| Maps | Google Maps JavaScript API |
+| Maps |  API |
 | Images | Cloudinary |
 
 ---
@@ -70,8 +68,8 @@ npm run install:all
 **Backend** — copy `server/.env.example` to `server/.env` and fill in all values:
 ```
 MONGODB_URI=...
-SUPABASE_URL=...
-SUPABASE_SERVICE_ROLE_KEY=...
+FIREBASE_URL=...
+FIREBASE_SERVICE_ROLE_KEY=...
 CLOUDINARY_CLOUD_NAME=...
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
@@ -81,9 +79,9 @@ PORT=5000
 
 **Frontend** — copy `client/.env.example` to `client/.env` and fill in:
 ```
-VITE_SUPABASE_URL=...
-VITE_SUPABASE_ANON_KEY=...
-VITE_GOOGLE_MAPS_API_KEY=...
+VITE_FIREBASE_URL=...
+VITE_FIREBASE_ANON_KEY=...
+VITE_API_KEY=...
 VITE_API_BASE_URL=http://localhost:5000/api
 ```
 
