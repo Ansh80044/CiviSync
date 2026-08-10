@@ -4,10 +4,12 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
-import { Mail, Lock, Eye, EyeOff, ArrowLeft, MapPin, Zap, Users } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowLeft, MapPin, Zap, Users, Phone, Hash } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 /* ── Civic Logo Mark ─────────────────────────────────────────────────────── */
@@ -49,6 +51,10 @@ export default function Auth() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [authMethod, setAuthMethod] = useState('email');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otp, setOtp] = useState('');
+  const [confirmationResult, setConfirmationResult] = useState(null);
   const { user, profile } = useAuth();
   const navigate = useNavigate();
 
@@ -58,6 +64,15 @@ export default function Auth() {
       navigate(destination, { replace: true });
     }
   }, [user, profile, navigate]);
+
+  useEffect(() => {
+    return () => {
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = null;
+      }
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -87,6 +102,61 @@ export default function Auth() {
       toast.error(err.message || 'Google sign-in failed');
     } finally {
       setGoogleLoading(false);
+    }
+  };
+
+  const setupRecaptcha = () => {
+    if (!window.recaptchaVerifier) {
+      const container = document.getElementById('recaptcha-container');
+      if (container) container.innerHTML = '';
+      
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+      });
+    }
+  };
+
+  const handleSendOtp = async (e) => {
+    e.preventDefault();
+    if (!phoneNumber) { toast.error('Please enter a phone number'); return; }
+    
+    let formattedNumber = phoneNumber.trim();
+    if (!formattedNumber.startsWith('+')) {
+      // Firebase console automatically adds a space after the country code. 
+      // We match that exactly so it recognizes it as a test number!
+      formattedNumber = `+91 ${formattedNumber}`;
+    }
+
+    setLoading(true);
+    try {
+      setupRecaptcha();
+      const appVerifier = window.recaptchaVerifier;
+      const confirmation = await signInWithPhoneNumber(auth, formattedNumber, appVerifier);
+      setConfirmationResult(confirmation);
+      toast.success('OTP sent successfully!');
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'Failed to send OTP');
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = null;
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    if (!otp) { toast.error('Please enter the OTP'); return; }
+    setLoading(true);
+    try {
+      await confirmationResult.confirm(otp);
+      toast.success('Successfully signed in!');
+    } catch (err) {
+      toast.error(err.message || 'Invalid OTP');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -259,83 +329,192 @@ export default function Auth() {
           {/* Divider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
             <div style={{ flex: 1, height: 1, background: '#E8E5DE' }} />
-            <span style={{ fontSize: 12, color: '#6B6B6B', fontWeight: 500 }}>or continue with email</span>
+            <span style={{ fontSize: 12, color: '#6B6B6B', fontWeight: 500 }}>or continue with</span>
             <div style={{ flex: 1, height: 1, background: '#E8E5DE' }} />
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div>
-              <label className="label">Email address</label>
-              <div style={{ position: 'relative' }}>
-                <Mail size={14} style={{
-                  position: 'absolute', left: 12, top: '50%',
-                  transform: 'translateY(-50%)', color: '#6B6B6B',
-                }} />
-                <input
-                  className="input"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  style={{ paddingLeft: 34 }}
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="label">Password</label>
-              <div style={{ position: 'relative' }}>
-                <Lock size={14} style={{
-                  position: 'absolute', left: 12, top: '50%',
-                  transform: 'translateY(-50%)', color: '#6B6B6B',
-                }} />
-                <input
-                  className="input"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  style={{ paddingLeft: 34, paddingRight: 40 }}
-                  required
-                  minLength={6}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  style={{
-                    position: 'absolute', right: 11, top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: '#6B6B6B', display: 'flex',
-                  }}
-                >
-                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-              </div>
-            </div>
-
+          <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
             <button
-              type="submit"
+              type="button"
+              onClick={() => { setAuthMethod('email'); setConfirmationResult(null); }}
               style={{
-                marginTop: 4, width: '100%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                gap: 8, padding: '12px 20px',
-                background: '#011410', color: '#fff',
-                border: '1.5px solid #011410', borderRadius: 9,
-                fontFamily: "'Poppins', sans-serif",
-                fontWeight: 600, fontSize: 14, cursor: 'pointer',
-                transition: 'all 0.16s ease',
-                opacity: loading || googleLoading ? 0.6 : 1,
+                flex: 1, padding: '8px 0', borderRadius: 8,
+                border: authMethod === 'email' ? '1.5px solid #011410' : '1.5px solid #E8E5DE',
+                background: authMethod === 'email' ? '#FAFAF7' : 'transparent',
+                color: '#1C1C1E', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                fontFamily: "'Poppins', sans-serif"
               }}
-              disabled={loading || googleLoading}
-              onMouseEnter={e => { if (!loading && !googleLoading) e.currentTarget.style.background = '#000806'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = '#011410'; }}
             >
-              {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+              Email
             </button>
-          </form>
+            <button
+              type="button"
+              onClick={() => { setAuthMethod('phone'); setConfirmationResult(null); }}
+              style={{
+                flex: 1, padding: '8px 0', borderRadius: 8,
+                border: authMethod === 'phone' ? '1.5px solid #011410' : '1.5px solid #E8E5DE',
+                background: authMethod === 'phone' ? '#FAFAF7' : 'transparent',
+                color: '#1C1C1E', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                fontFamily: "'Poppins', sans-serif"
+              }}
+            >
+              Phone
+            </button>
+          </div>
+
+          {/* Form */}
+          {authMethod === 'email' ? (
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label className="label">Email address</label>
+                <div style={{ position: 'relative' }}>
+                  <Mail size={14} style={{
+                    position: 'absolute', left: 12, top: '50%',
+                    transform: 'translateY(-50%)', color: '#6B6B6B',
+                  }} />
+                  <input
+                    className="input"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    style={{ paddingLeft: 34 }}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Password</label>
+                <div style={{ position: 'relative' }}>
+                  <Lock size={14} style={{
+                    position: 'absolute', left: 12, top: '50%',
+                    transform: 'translateY(-50%)', color: '#6B6B6B',
+                  }} />
+                  <input
+                    className="input"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    style={{ paddingLeft: 34, paddingRight: 40 }}
+                    required
+                    minLength={6}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      position: 'absolute', right: 11, top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: '#6B6B6B', display: 'flex',
+                    }}
+                  >
+                    {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                style={{
+                  marginTop: 4, width: '100%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  gap: 8, padding: '12px 20px',
+                  background: '#011410', color: '#fff',
+                  border: '1.5px solid #011410', borderRadius: 9,
+                  fontFamily: "'Poppins', sans-serif",
+                  fontWeight: 600, fontSize: 14, cursor: 'pointer',
+                  transition: 'all 0.16s ease',
+                  opacity: loading || googleLoading ? 0.6 : 1,
+                }}
+                disabled={loading || googleLoading}
+                onMouseEnter={e => { if (!loading && !googleLoading) e.currentTarget.style.background = '#000806'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#011410'; }}
+              >
+                {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+              </button>
+            </form>
+          ) : !confirmationResult ? (
+            <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label className="label">Phone Number</label>
+                <div style={{ position: 'relative' }}>
+                  <Phone size={14} style={{
+                    position: 'absolute', left: 12, top: '50%',
+                    transform: 'translateY(-50%)', color: '#6B6B6B',
+                  }} />
+                  <input
+                    className="input"
+                    type="tel"
+                    placeholder="9876543210"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    style={{ paddingLeft: 34 }}
+                    required
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                style={{
+                  marginTop: 4, width: '100%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  gap: 8, padding: '12px 20px',
+                  background: '#011410', color: '#fff',
+                  border: '1.5px solid #011410', borderRadius: 9,
+                  fontFamily: "'Poppins', sans-serif",
+                  fontWeight: 600, fontSize: 14, cursor: 'pointer',
+                  transition: 'all 0.16s ease',
+                  opacity: loading || googleLoading ? 0.6 : 1,
+                }}
+                disabled={loading || googleLoading}
+              >
+                {loading ? 'Sending OTP...' : 'Send OTP'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label className="label">Enter OTP</label>
+                <div style={{ position: 'relative' }}>
+                  <Hash size={14} style={{
+                    position: 'absolute', left: 12, top: '50%',
+                    transform: 'translateY(-50%)', color: '#6B6B6B',
+                  }} />
+                  <input
+                    className="input"
+                    type="text"
+                    placeholder="123456"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    style={{ paddingLeft: 34 }}
+                    required
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                style={{
+                  marginTop: 4, width: '100%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  gap: 8, padding: '12px 20px',
+                  background: '#011410', color: '#fff',
+                  border: '1.5px solid #011410', borderRadius: 9,
+                  fontFamily: "'Poppins', sans-serif",
+                  fontWeight: 600, fontSize: 14, cursor: 'pointer',
+                  transition: 'all 0.16s ease',
+                  opacity: loading || googleLoading ? 0.6 : 1,
+                }}
+                disabled={loading || googleLoading}
+              >
+                {loading ? 'Verifying...' : 'Verify & Login'}
+              </button>
+            </form>
+          )}
+
+          <div id="recaptcha-container"></div>
 
           <p style={{ marginTop: 20, textAlign: 'center', fontSize: 13, color: '#6B6B6B' }}>
             {mode === 'login' ? (
